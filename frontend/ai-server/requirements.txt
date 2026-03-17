@@ -1,8 +1,7 @@
 fastapi
 uvicorn
-rembg
+rembg[cpu]
 pillow
 numpy
 opencv-python
 python-multipart
-onnxruntime
