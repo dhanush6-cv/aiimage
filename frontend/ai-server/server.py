@@ -2,10 +2,13 @@ from fastapi import FastAPI, UploadFile, File
 from fastapi.responses import Response
 from fastapi.middleware.cors import CORSMiddleware
 from rembg import remove, new_session
-from PIL import Image, ImageFilter
+from PIL import Image
 import numpy as np
 import io
 import cv2
+import os
+import uvicorn
+
 app = FastAPI()
 
 app.add_middleware(
@@ -28,16 +31,13 @@ def home():
 # -----------------------------
 # BACKGROUND REMOVER (SHARP)
 # -----------------------------
-
 @app.post("/remove-bg")
 async def remove_bg(file: UploadFile = File(...)):
-
     input_bytes = await file.read()
 
     output = remove(input_bytes, session=session)
 
     img = Image.open(io.BytesIO(output)).convert("RGBA")
-
     data = np.array(img)
 
     alpha = data[:, :, 3]
@@ -55,20 +55,18 @@ async def remove_bg(file: UploadFile = File(...)):
 
     return Response(buf.getvalue(), media_type="image/png")
 
+
 # -----------------------------
 # IMAGE ENHANCER
 # -----------------------------
-
 @app.post("/enhance")
 async def enhance(file: UploadFile = File(...)):
-
     contents = await file.read()
 
     img = Image.open(io.BytesIO(contents)).convert("RGB")
 
     w, h = img.size
-
-    enhanced = img.resize((w*2, h*2), Image.LANCZOS)
+    enhanced = img.resize((w * 2, h * 2), Image.LANCZOS)
 
     buf = io.BytesIO()
     enhanced.save(buf, format="PNG")
@@ -79,14 +77,11 @@ async def enhance(file: UploadFile = File(...)):
 # -----------------------------
 # SKETCH
 # -----------------------------
-
 @app.post("/sketch")
 async def sketch(file: UploadFile = File(...)):
-
     contents = await file.read()
 
     nparr = np.frombuffer(contents, np.uint8)
-
     img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
 
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
@@ -95,11 +90,20 @@ async def sketch(file: UploadFile = File(...)):
     inv = 255 - gray
 
     # blur
-    blur = cv2.GaussianBlur(inv,(31,31),0)
+    blur = cv2.GaussianBlur(inv, (31, 31), 0)
 
     # dodge blend (pencil effect)
-    sketch = cv2.divide(gray,255-blur,scale=235)
+    sketch_img = cv2.divide(gray, 255 - blur, scale=235)
 
-    _,buffer = cv2.imencode(".png",sketch)
+    _, buffer = cv2.imencode(".png", sketch_img)
 
-    return Response(buffer.tobytes(),media_type="image/png")
+    return Response(buffer.tobytes(), media_type="image/png")
+
+
+# -----------------------------
+# 🔥 RENDER START FIX
+# -----------------------------
+port = int(os.environ.get("PORT", 10000))
+
+if __name__ == "__main__":
+    uvicorn.run("server:app", host="0.0.0.0", port=port)
